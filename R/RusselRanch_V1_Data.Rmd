@@ -1,0 +1,211 @@
+---
+title: "RussellRanch_V1_Data"
+author: "J Sorensen"
+date: "1/28/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Initial Data Cleaning and Setup 
+Want to separate out the Bulk vs Virome OTU tables so we can do some stats on each of them separately later.
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(vegan)
+library(grid)
+library(cowplot)
+
+setwd("~/Documents/UCD/GitHubRepos/RussellRanch/R")
+
+map <- read_delim("InputFiles/RussellRanch_Map.txt", col_names = TRUE, delim = "\t")
+
+map$Management <- gsub(pattern="C", replacement="Conventional", map$Management)
+map$Management <- gsub(pattern = "O", replacement="Organic", map$Management)
+
+map <- map %>%
+  select(-Year, -Crop)
+
+map$Date_Sample <- paste(map$Month,map$Sample_1, sep = "_")
+map$Date_Factor <- factor(map$Month, levels=c("2018-07-07", "2018-10-08"))
+
+
+map_Bulk <- filter(map, BulkVsVirome=="Bulk")
+map_Virome <- filter(map, BulkVsVirome=="Virome")
+saveRDS(map_Bulk, file = "DataStructures/map_Bulk.RDS")
+saveRDS(map_Virome, file = "DataStructures/map_Virome.RDS")
+
+otu <- read_delim("InputFiles/Viral_Coverage_Table_190905.txt", delim="\t", col_names = TRUE)
+
+Contig_Length <- otu[,1:2]
+otu <- otu %>%
+  select(-contig, -Length)
+
+otu <- as.data.frame(otu)
+row.names(otu) <- Contig_Length$contig 
+
+
+otu_bulk <- otu[,colnames(otu)%in%map_Bulk$Sample]
+otu_virome <- otu[,colnames(otu)%in%map_Virome$Sample]
+#colnames(otu_virome)==map_Virome$Sample
+#colnames(otu_bulk)==map_Bulk$Sample
+
+saveRDS(otu_bulk, file="DataStructures/otu_bulk.RDS")
+saveRDS(otu_virome, file="DataStructures//otu_virome.RDS")
+
+hist(colSums(otu_virome))
+hist(colSums(otu_bulk))
+
+otu_bulk_sub <- otu_bulk[,map_Bulk$Date_Sample%in%map_Virome$Date_Sample]
+otu_virome_sub <- otu_virome[map_Virome$Date_Sample%in%map_Bulk$Date_Sample]
+
+map_bulk_sub <- map_Bulk[map_Bulk$Date_Sample%in%map_Virome$Date_Sample,]
+
+map_bulk_sub$Sample==colnames(otu_bulk_sub)
+
+map_bulk_sub$Date_Sample==map_Virome$Date_Sample
+```
+
+# Beta Diversity Analyses
+Now that our data sets are cleaned up and ready to go, let's start looking at the overall patterns in the datasets. 
+
+## Setting up Bray Curtis Dissimilarities and PCoAs
+```{r}
+otu_bulk_sub.dist <- vegdist(t(otu_bulk_sub), method="bray")
+otu_virome.dist <- vegdist(t(otu_virome_sub),method="bray")
+
+otu_bulk_sub.pcoa <- cmdscale(otu_bulk_sub.dist, eig = TRUE)
+otu_virome.pcoa <- cmdscale(otu_virome.dist, eig=TRUE)
+
+bulk.eig1 <- otu_bulk_sub.pcoa$eig[1]/sum(otu_bulk_sub.pcoa$eig)
+bulk.eig2 <- otu_bulk_sub.pcoa$eig[2]/sum(otu_bulk_sub.pcoa$eig)
+
+virome.eig1 <- otu_virome.pcoa$eig[1]/sum(otu_virome.pcoa$eig)
+virome.eig2 <- otu_virome.pcoa$eig[2]/sum(otu_virome.pcoa$eig)
+
+
+
+map_Virome$PCoA1 <- otu_virome.pcoa$points[,1]
+map_Virome$PCoA2 <- otu_virome.pcoa$points[,2]
+
+map_bulk_sub$PCoA1 <- otu_bulk_sub.pcoa$points[,1]
+map_bulk_sub$PCoA2 <- otu_bulk_sub.pcoa$points[,2]
+
+Virome_PCoA <- ggplot(map_Virome, aes(x=PCoA1, y=PCoA2))+
+  geom_point(aes(shape= Date_Factor, color=Management))+
+  xlab(label = paste("PCoA 1: ", round(virome.eig1, 3)*100, "% Variance Explained", sep=""))+
+  ylab(label = paste("PCoA 2: ", round(virome.eig2, 3)*100, "% Variance Explained", sep=""))+
+  ggtitle(label="Virome PCoA")+
+  guides(color=FALSE, size=FALSE, shape=FALSE, fill=FALSE )
+
+
+
+Bulk_PCoA <- ggplot(map_bulk_sub, aes(x=PCoA1, y=PCoA2))+
+  geom_point(aes(shape=Date_Factor, color=Management))+
+  xlab(label = paste("PCoA 1: ", round(bulk.eig1, 3)*100, "% Variance Explained", sep=""))+
+  ylab(label = paste("PCoA 2: ", round(bulk.eig2, 3)*100, "% Variance Explained", sep=""))+
+  ggtitle(label="Bulk PCoA")+
+  guides(color=FALSE, size=FALSE, shape=FALSE, fill=FALSE )
+
+PCoA_Legend <- ggplot(map_bulk_sub, aes(x=PCoA1, y=PCoA2))+
+  geom_point(aes(shape=Date_Factor, color=Management))+
+  xlab(label = paste("PCoA 1: ", round(bulk.eig1, 3)*100, "% Variance Explained", sep=""))+
+  ylab(label = paste("PCoA 2: ", round(bulk.eig2, 3)*100, "% Variance Explained", sep=""))+
+  ggtitle(label="Bulk PCoA")+
+  theme(legend.box = "horizontal")
+
+PCoA_Leg <- get_legend(PCoA_Legend)
+
+plot_grid(plot_grid(Bulk_PCoA, Virome_PCoA, ncol=2), PCoA_Leg, ncol=1, rel_heights = c(3,1))
+
+setEPS()
+postscript(file="Figures/BulkVsViromePCoa.eps", paper="special", width=8, height = 5, pointsize = 10)
+plot_grid(plot_grid(Bulk_PCoA, Virome_PCoA, ncol=2), PCoA_Leg, ncol=1, rel_heights = c(3,1))
+dev.off()
+```
+
+Initial glances at the PCoAs suggests the samples cluster by Management practice more so than by time/Date. 
+
+## Do the two datasets show similar patterns overall?
+  Using Mantel tests and Procrustes to see if the Bulk and Virome datasets are similar overall. 
+
+```{r}
+mantel(otu_virome.dist, otu_bulk_sub.dist)
+
+protest(otu_virome.pcoa, otu_bulk_sub.pcoa)
+```
+Both Mantel tests and Procrustes suggest the two datasets show the same patterns overall. Perhaps this means we could just use the bulk for tests we need more power for? Hmm not totally sure... For now, everything performed from here down will be done on the Virome dataset, not the bulk. 
+
+
+## Now for some hypothesis tests
+  Testing for influence of Management and Dat first. Using adonis() to perform permanovas, using anosim() for ANOSIM test. 
+```{r}
+adonis(otu_virome.dist~map_Virome$Management*map_Virome$Date_Factor)
+adonis(otu_virome.dist~map_Virome$Management+map_Virome$Date_Factor)
+adonis(otu_virome.dist~map_Virome$Management)
+adonis(otu_virome.dist~map_Virome$Date_Factor)
+
+anosim(otu_virome.dist, grouping = map_Virome$Management)
+anosim(otu_virome.dist, grouping= map_Virome$Date_Factor)
+
+```
+For both PERMANOVA and ANOSIM, Management practice appears to have a bigger influence than time. 
+
+## What about beta dispersion?
+  Are both management practices equivalent in their betadispersion?
+```{r}
+Disper_Management <- betadisper(otu_virome.dist, group=map_Virome$Management)
+Disper_Management
+TukeyHSD(Disper_Management)
+
+Disper_Date <- betadisper(otu_virome.dist, group=map_Virome$Date_Factor)
+Disper_Date 
+TukeyHSD(Disper_Date)
+
+```
+
+
+# Alpha Diversity
+## Richness 
+Calculating and plotting Richness based on management practice and date
+```{r}
+virome_PA <- 1*(otu_virome>0)
+
+map_Virome$Richness <- colSums(virome_PA)
+
+ggplot(map_Virome, aes(x=Date_Factor, y=Richness))+
+  geom_boxplot(aes(group=interaction(Date_Factor, Management), color=Management))+
+  geom_point(position=position_dodge(width=0.75),aes(color=Management))
+```
+
+## Testing Richness differences
+  Using Kruskal-Wallis non parametic test to test for the differences between conventional and organic management practices.
+
+```{r}
+#July Test
+map_Virome_July <- map_Virome[map_Virome$Date_Factor=="2018-07-07",]
+kruskal.test(map_Virome_July$Richness, g = map_Virome_July$Management)
+
+
+map_Virome_Oct <- map_Virome[map_Virome$Date_Factor=="2018-10-08",]
+kruskal.test(map_Virome_Oct$Richness, g=map_Virome_Oct$Management)
+
+```
+
+No significant difference in Richness between management practices according to Kruksal Wallis test. 
+
+# Indicator Species Analysis
+  We have a relatively few number of taxa present in the study. Perhaps we could run an indicator species analysis and see if there are certain viral contigs associated with management types.
+```{r}
+library(indicspecies)
+indval <- multipatt(t(otu_virome), map_Virome$Management, control = how(nperm=999))
+
+summary(indval)
+```
+
