@@ -142,3 +142,26 @@ cd /share/emersonlab/sorensen/RussellRanch/FreshAnalysis/Cluster_Assemblies/cdhi
 ./psi-cd-hit.pl -i ../../Total_Assembly_Sorted.fa -o ../../Cluster_Total_Assembly.fa -c 0.9 -G 1 -g 1 -prog blastn -circle 1 -exec local -para 3 -blp 4
 scontrol show job $SLURM_JOB_ID
 ```
+The above took to long to complete so the job got killed. Recently discovered a way for CD-HIT to save the progress of a job using the `-rs` flag which saves checkpoints every so many steps. Edited job script to increase resources as well has adding the `-rs` flag in case it does not finish in the allotted time.
+
+```
+#!/bin/bash --login
+########## SBATCH Lines for Resource Request ##########
+
+#SBATCH --time=24:00:00             # limit of wall clock time - how long the job will run (same as -t)
+#SBATCH --nodes=1                 # number of different nodes - could be an exact number or a range of nodes (same as -N)
+#SBATCH --ntasks=1                  # number of tasks - how many tasks (nodes) that you require (same as -n)
+#SBATCH --cpus-per-task=24           # number of CPUs (or cores) per task (same as -c)
+#SBATCH --mem-per-cpu=8G            # memory required per allocated CPU (or core) - amount of memory (in bytes)
+#SBATCH --job-name Name_of_Job      # you can give your job a name for easier identification (same as -J)
+
+########## Command Lines to Run ##########
+
+
+source ~/.bashrc
+conda activate CDHIT
+cd /share/emersonlab/sorensen/RussellRanch/FreshAnalysis/Cluster_Assemblies/cdhit-master/psi-cd-hit
+./psi-cd-hit.pl -i ../../Total_Assembly_Sorted.fa -o ../../Cluster_Total_Assembly_MoreResources.fa -c 0.9 -G 1 -g 1 -prog blastn -circle 1 -exec local -para 6 -blp 4 -rs 5000
+#./psi-cd-hit.pl -i ../../Total_Assembly_Sorted.fa -o ../../Clustered_Total_Assembly.fa -c 0.90 -aS 0.85
+scontrol show job $SLURM_JOB_ID
+```
