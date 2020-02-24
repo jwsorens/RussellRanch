@@ -144,7 +144,7 @@ Both Mantel tests and Procrustes suggest the two datasets show the same patterns
 
 
 ## Now for some hypothesis tests
-  Testing for influence of Management and Dat first. Using adonis() to perform permanovas, using anosim() for ANOSIM test. 
+  Testing for influence of Management and Date first. Using adonis() to perform permanovas, using anosim() for ANOSIM test. 
 ```{r}
 adonis(otu_virome.dist~map_Virome$Management*map_Virome$Date_Factor)
 adonis(otu_virome.dist~map_Virome$Management+map_Virome$Date_Factor)
@@ -207,5 +207,7 @@ library(indicspecies)
 indval <- multipatt(t(otu_virome), map_Virome$Management, control = how(nperm=999))
 
 summary(indval)
+
+indval$cluster
 ```
 

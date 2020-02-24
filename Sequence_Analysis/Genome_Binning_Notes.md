@@ -112,6 +112,22 @@ git clone https://github.com/ctSkennerton/minced.git
 
 MinCED only found 28 CRISPR arrays in the assembled contigs and unfortunately the output is almost identical to CRT so I still need to detemine the best way to parse this file.
 
+#### 3. Cleaning CRT and MinCED outputs
+
+Unfortunatley the out puts of CRT and MinCED are not easilty parseable by many programs, so we need to do a little bit of cleaning up on the files before we can easily read them into R.
+```
+# For CRT outputs
+## First remove every instance of "-" from the files
+
+sed 's/-//g' Total_Assembly.out > Cleaned_CRT.out
+
+##Then just print the lines with repeats and spacers (ie remove the blank lines and the header lines) 
+awk '/POSITION/{flag=1} /Repeats/{flag=0} flag' Cleaned_CRT.out > CRT_forR.out
+
+
+```
+
+
 ### Clustering Metagenome Assemblies
 
 Because I chose to assemble all of the metagenomes separately from each other, I need to perform some clustering of the resulting assembled contigs in order to reduce any redundancy in the dataset. Currently am trying to use psi-cd-hit ([GitHub](https://github.com/weizhongli/cdhit/wiki/3.-User's-Guide#PSICDHIT_clustering)) for this clustering as it is meant to deal with particularly long sequences. This step has not finished running as of yet, but I have posted the code used to install and submit below.
@@ -142,7 +158,7 @@ cd /share/emersonlab/sorensen/RussellRanch/FreshAnalysis/Cluster_Assemblies/cdhi
 ./psi-cd-hit.pl -i ../../Total_Assembly_Sorted.fa -o ../../Cluster_Total_Assembly.fa -c 0.9 -G 1 -g 1 -prog blastn -circle 1 -exec local -para 3 -blp 4
 scontrol show job $SLURM_JOB_ID
 ```
-The above took to long to complete so the job got killed. Recently discovered a way for CD-HIT to save the progress of a job using the `-rs` flag which saves checkpoints every so many steps. Edited job script to increase resources as well has adding the `-rs` flag in case it does not finish in the allotted time.
+The above took too long to complete so the job got killed. Recently discovered a way for CD-HIT to save the progress of a job using the `-rs` flag which saves checkpoints every so many steps. Edited job script to increase resources as well has adding the `-rs` flag in case it does not finish in the allotted time.
 
 ```
 #!/bin/bash --login

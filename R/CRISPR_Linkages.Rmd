@@ -1,0 +1,112 @@
+---
+title: "Untitled"
+author: "J Sorensen"
+date: "2/14/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Using CRISPR arrays to identify host virus linkages in metagenomes.
+The overall goal of this work is to use CRISPR arrays in metagenomes in order to tie specific viral populations to specific bacterial and archaeal populations in the soils at the Russell Ranch sites. 
+
+
+## Reading in the results from CRT and MinCED
+```{r }
+setwd("~/Documents/UCD/GitHubRepos/RussellRanch/R")
+crt <- read.table("InputFiles/CRT_forR.out", strip.white=TRUE, fill = TRUE, stringsAsFactors = FALSE)
+
+minced <- read.table("InputFiles/MinCED_forR.out", strip.white=TRUE, fill = TRUE, stringsAsFactors = FALSE)
+
+crt <- crt[,1:3]
+y <-0
+crt$CRISPR <- NA
+for (i in 1:nrow(crt)){
+  if(crt[i,2]=="REPEAT"){
+    y=y+1
+  }
+    crt$CRISPR[i] <- paste("CRISPR",y,sep="")
+}
+
+crt <- crt[crt$V2!="REPEAT",]
+crt <- crt[,-1]
+
+colnames(crt) <- c("Repeat","Spacer","CRISPR")
+
+Repeats_crt <- unique(crt$Repeat)
+
+Spacers_crt <- unique(crt$Spacer)
+
+Repeat_Header_crt <- paste(">CRT_Repeat", c(1:length(Repeats_crt)), sep="")
+
+Spacer_Header_crt <- paste(">CRT_Spacer", c(1:length(Spacers_crt)), sep="")
+
+Repeats_crt.fasta <- c(rbind(Repeat_Header_crt, Repeats_crt))
+
+Spacers_crt.fasta <- c(rbind(Spacer_Header_crt,Spacers_crt))
+
+Repeats_NameKey_crt <- data.frame(Repeat_Name =paste("Repeat", c(1:length(Repeats_crt)), sep=""), Repeat=Repeats_crt)
+Spacers_NameKey_crt <- data.frame(Spacer_Name=paste("Spacer", c(1:length(Spacers_crt)), sep=""), Spacer=Spacers_crt)
+
+colnames(Spacers_NameKey_crt) <- c("Spacer_Name", "Spacer")
+colnames(Repeats_NameKey_crt) <- c("Repeat_Name", "Repeat")
+
+
+write.table(Spacers_crt.fasta, file="Spacers_CRT.fasta", quote=FALSE, row.names=FALSE, col.names = FALSE)
+
+write.table(Repeats_crt.fasta, file="Repeats_CRT.fasta", col.names = FALSE, row.names = FALSE, quote = FALSE)
+
+crt <- left_join(crt, Spacers_NameKey_crt, by="Spacer")
+crt <- left_join(crt, Repeats_NameKey_crt, by="Repeat")
+
+
+minced_sequences <- minced$V2[minced$V1=="Sequence"]
+
+minced <- minced[minced$V1!="Sequence",]
+minced <- minced[minced$V1!="CRISPR",]
+
+minced <- minced[,1:3]
+
+y <-0
+minced$CRISPR <- NA
+for (i in 1:nrow(minced)){
+  if(minced[i,2]=="REPEAT"){
+    y=y+1
+  }
+    minced$CRISPR[i] <- paste("CRISPR",y,sep="")
+    minced$RepeatSource[i] <- minced_sequences[y]
+}
+
+
+minced <- minced[minced$V1!="POSITION",]
+
+minced <- minced[,-1]
+
+colnames(minced) <- c("Repeat", "Spacer", "CRISPR", "RepeatSource")
+
+Spacers_minced <- unique(minced$Spacer)
+
+Spacer_Header_minced <- paste(">MinCED_Spacer", c(1:length(Spacers_minced)), sep="")
+
+Spacers_minced.fasta <- c(rbind(Spacer_Header_minced,Spacers_minced))
+
+write.table(Spacers_minced.fasta, file="Spacers_minced.fasta", col.names = FALSE, row.names = FALSE, quote = FALSE)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
